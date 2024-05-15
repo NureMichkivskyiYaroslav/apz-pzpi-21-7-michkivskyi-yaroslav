@@ -1,11 +1,12 @@
 const mongoose = require('mongoose');
 
 const temperatureIndicatorSchema = new mongoose.Schema({
-    clientSessionID: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'ClientSession' },
+    tripCaseId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'TripCase' },
+    caseId:{type: Number, required: true },
     dateTime: { type: Date, required: true},
     temperature: { type: Number, required: true},
 });
 
-const GeneralCounterIndicator = mongoose.model('GeneralCounterIndicator', generalCounterIndicatorSchema);
+const TemperatureIndicator = mongoose.model('TemperatureIndicator', temperatureIndicatorSchema);
 
-module.exports = GeneralCounterIndicator;
+module.exports = TemperatureIndicator;
