@@ -122,7 +122,7 @@ class TripController {
         try {
             const tripId = req.params.id;
 
-            const updatedTrip = await Trip.findByIdAndUpdate(tripId, { status: 'completed' }, { new: true });
+            const updatedTrip = await Trip.findByIdAndUpdate(tripId, { status: 'completed', finishFact: new Date() }, { new: true });
 
             res.status(200).json(updatedTrip);
         } catch (error) {

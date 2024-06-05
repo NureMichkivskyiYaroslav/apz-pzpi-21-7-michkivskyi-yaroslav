@@ -1,9 +1,11 @@
 const TemperatureIndicator = require('../models/TemperatureIndicator');
+const TripCase = require('../models/TripCase');
 
 const temperatureExceededService = {
     async calculateStatistics(tripCaseId) {
         // Отримуємо всі температурні показники для даного tripCase
         const indicators = await TemperatureIndicator.find({ tripCaseId });
+        const tripCase = await TripCase.findOne({"_id":tripCaseId})
 
         if (!indicators || indicators.length === 0) {
             return {
@@ -18,8 +20,10 @@ const temperatureExceededService = {
         let totalExceed = 0;
         let exceedCount = 0;
 
+
         indicators.forEach(indicator => {
-            const { temperature, maxTemperature } = indicator;
+            const maxTemperature = tripCase.maxTemperature
+            const { temperature } = indicator;
             const exceed = temperature - maxTemperature;
 
             if (exceed > 0) {
