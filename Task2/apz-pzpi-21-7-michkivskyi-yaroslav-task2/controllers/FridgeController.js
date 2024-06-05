@@ -4,7 +4,16 @@ const Trip = require('../models/Trip');
 class FridgeController {
     async addFridge(req, res) {
         try {
-            // Логика добавления нового холодильника
+            const { inventoryNumber, latitude, longitude } = req.body;
+            const newFridge = new Fridge({
+                inventoryNumber,
+                location: {
+                    type: 'Point',
+                    coordinates: [longitude, latitude]
+                }
+            });
+            await newFridge.save();
+            res.status(201).json(newFridge);
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Internal Server Error' });
@@ -13,7 +22,44 @@ class FridgeController {
 
     async editFridge(req, res) {
         try {
-            // Логика редактирования холодильника
+            const { id } = req.params;
+            const { inventoryNumber } = req.body;
+
+            const updatedFridge = await Fridge.findByIdAndUpdate(id, { inventoryNumber }, { new: true });
+
+            if (!updatedFridge) {
+                return res.status(404).json({ error: 'Fridge not found' });
+            }
+
+            res.status(200).json(updatedFridge);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    }
+
+    async relocateFridge(req, res) {
+        try {
+            const { id } = req.params;
+            const { latitude, longitude } = req.body;
+
+            const updatedFridge = await Fridge.findByIdAndUpdate(
+                id,
+                {
+                    location: {
+                        type: 'Point',
+                        coordinates: [longitude, latitude]
+                    },
+                    timestamp: new Date()
+                },
+                { new: true }
+            );
+
+            if (!updatedFridge) {
+                return res.status(404).json({ error: 'Fridge not found' });
+            }
+
+            res.status(200).json(updatedFridge);
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Internal Server Error' });
@@ -22,7 +68,14 @@ class FridgeController {
 
     async deleteFridge(req, res) {
         try {
-            // Логика удаления холодильника
+            const { id } = req.params;
+            const deletedFridge = await Fridge.findByIdAndDelete(id);
+
+            if (!deletedFridge) {
+                return res.status(404).json({ error: 'Fridge not found' });
+            }
+
+            res.status(200).json({ message: 'Fridge deleted successfully' });
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Internal Server Error' });
@@ -40,7 +93,7 @@ class FridgeController {
 
             const trips = await Trip.find({ fridgeId: fridge._id })
                 .sort({ status: 1, start: 1 })
-                .select('status start');
+                .select('-__v -fridgeId');
 
             res.status(200).json({ fridge, trips });
         } catch (error) {
@@ -51,15 +104,15 @@ class FridgeController {
 
     async getNearestFridge(req, res) {
         try {
-            const { fridgeId, latitude, longitude } = req.query; // Получаем айди рефрижератора и координаты из запроса
-            const coordinates = [parseFloat(longitude), parseFloat(latitude)]; // Преобразуем координаты в массив чисел
+            const fridgeId = req.params.id;
+            const fridge = await Fridge.findById(fridgeId)
 
-            // Получаем текущее время
+            const coordinates = fridge.location.coordinates
+
             const currentTime = new Date();
-            // Вычисляем время, прошедшее за последний час
             const lastHourTime = new Date(currentTime.getTime() - 60 * 60 * 1000);
 
-            // Находим ближайший активный холодильник к указанному айди, который отправлял данные за последний час и свободный
+            // знаходимо найближчий активний холодильник до вказаного, що відправляв дані останньої години та вільний
             const nearestActiveFridge = await Fridge.aggregate([
                 {
                     $geoNear: {
@@ -67,24 +120,24 @@ class FridgeController {
                             type: "Point",
                             coordinates: coordinates
                         },
-                        distanceField: "distance",
-                        spherical: true,
-                        maxDistance: 10000, // Максимальное расстояние в метрах (задайте нужное значение)
+                        distanceField: "dist.calculated",
+                        // spherical: true,
+                        maxDistance: 10000, // Максимальна відстань у метрах
                         query: {
                             _id: {
-                                $ne: fridgeId // Исключаем указанный рефрижератор из поиска
+                                $ne: fridgeId // Виключаємо наш рефрижератор з пошуку
                             },
                             timestamp: {
-                                $gte: lastHourTime // Холодильник должен отправлять данные за последний час
+                                $gte: lastHourTime // Відправляв дані в останню годину
                             },
                             location: {
-                                $exists: true // Проверяем, что у холодильника есть данные о местоположении
+                                $exists: true
                             }
                         }
                     }
                 },
-                { $sort: { distance: 1 } }, // Сортируем по расстоянию
-                { $limit: 3 } // Берем только ближайший холодильник
+                { $sort: { distance: 1 } },
+                { $limit: 3 }
             ]);
 
             if (nearestActiveFridge.length === 0) {

@@ -4,8 +4,9 @@ const clientController = require('../controllers/ClientController');
 const adminMiddleware = require('../middlewares/adminMiddleware');
 const clientMiddleware = require('../middlewares/clientMiddleware');
 
+router.get('/all', adminMiddleware, clientController.getAllClients);
 router.post('/register', clientController.registerClient);
-router.get('/login', clientController.loginClient);
+router.post('/login', clientController.loginClient);
 router.get('/trips', clientMiddleware, clientController.getClientTrips);
 router.get('/:id', adminMiddleware, clientController.getClientById);
 

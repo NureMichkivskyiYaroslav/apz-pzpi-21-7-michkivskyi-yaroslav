@@ -5,8 +5,8 @@ const adminMiddleware = require('../middlewares/adminMiddleware');
 const clientMiddleware  = require('../middlewares/clientMiddleware');
 
 router.post('/add', adminMiddleware, tripCaseController.addTripCase);
-router.get('/:id', adminMiddleware, tripCaseController.getTripCase);
 router.get('/client/:id', clientMiddleware, tripCaseController.getTripCaseClient);
-router.post('/ti/add', adminMiddleware, tripCaseController.addTemperatureIndicator);
+router.post('/ti/add', tripCaseController.addTemperatureIndicator);
+router.get('/:id', adminMiddleware, tripCaseController.getTripCase);
 
 module.exports = router;

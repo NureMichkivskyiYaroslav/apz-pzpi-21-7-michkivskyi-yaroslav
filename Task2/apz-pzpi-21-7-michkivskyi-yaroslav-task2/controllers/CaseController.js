@@ -40,7 +40,7 @@ class CaseController {
                 return res.status(404).json({ error: 'Case not found' });
             }
 
-            res.status(200).json(deletedCase);
+            res.status(200).json("deleted");
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Internal Server Error' });
@@ -67,28 +67,25 @@ class CaseController {
 
     async getAllCases(req, res) {
         try {
-            // Получаем все кейсы из базы данных
             const allCases = await Case.find();
 
-            // Для каждого кейса находим все TripCase, которые с ним связаны
             const casesWithTripCases = await Promise.all(allCases.map(async (singleCase) => {
                 const tripCases = await TripCase.find({ caseId: singleCase._id });
 
-                // Вычисляем занятость кейса (суммируем количество TripCase)
-                const occupancy = tripCases.reduce((total, tripCase) => total + tripCase.price, 0);
+                const isFree = !tripCases.some(tripCase => tripCase.tripId && !tripCase.tripId.finishFact);
 
-                return { ...singleCase.toObject(), occupancy };
+
+                return { ...singleCase.toObject(), isFree };
             }));
 
-            // Сортируем кейсы сначала по занятости, затем по инвентарному номеру
+            // Sort firstly by isFree, then by inventory number
             const sortedCases = casesWithTripCases.sort((a, b) => {
-                if (a.occupancy !== b.occupancy) {
-                    return a.occupancy - b.occupancy;
+                if (a.isFree !== b.isFree) {
+                    return a.isFree - b.isFree;
                 }
                 return a.inventoryNumber - b.inventoryNumber;
             });
 
-            // Возвращаем отсортированные кейсы
             res.status(200).json(sortedCases);
         } catch (error) {
             console.error(error);

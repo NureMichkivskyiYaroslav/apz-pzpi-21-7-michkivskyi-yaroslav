@@ -3,15 +3,15 @@ const Case = require('../models/Case');
 const Driver = require('../models/Driver');
 const Fridge = require('../models/Fridge');
 const TripCase = require('../models/TripCase');
+const temperatureExceededService = require('../services/temperatureExceededService');
 
 class TripController {
     async addTrip(req, res) {
         try {
-            // Получаем данные из запроса
-            const { status, start, finishPlan, finishFact, driverId, clientId } = req.body;
+            const { finishPlan, driverId, clientId, fridgeId } = req.body;
 
-            // Создаем новый Trip
-            const newTrip = await Trip.create({ status, start, finishPlan, finishFact, driverId, clientId });
+            const finishPlanDate = new Date(finishPlan)
+            const newTrip = await Trip.create({ finishPlan:finishPlanDate, driverId, clientId, fridgeId });
 
             res.status(201).json(newTrip);
         } catch (error) {
@@ -22,33 +22,29 @@ class TripController {
 
     async getTrip(req, res) {
         try {
-            // Получаем id Trip из параметров запроса
             const tripId = req.params.id;
-
-            // Находим Trip по его id
             const trip = await Trip.findById(tripId);
 
             if (!trip) {
                 return res.status(404).json({ error: 'Trip not found' });
             }
 
-            // Находим информацию о водителе
             const driver = await Driver.findById(trip.driverId);
-
-            // Находим информацию о рефрижераторе
-            const fridge = await Fridge.findOne({ timestamp: { $exists: false } });
-
-            // Находим информацию о кейсе по TripCase
+            const fridge = await Fridge.findById(trip.fridgeId);
             const tripCases = await TripCase.find({ tripId });
 
-            // Подставляем инвентарный номер кейса вместо его id
             const tripCasesInfo = await Promise.all(tripCases.map(async (tripCase) => {
                 const caseInfo = await Case.findById(tripCase.caseId);
+                const statistics = await temperatureExceededService.calculateStatistics(tripCase._id)
+
                 return {
                     inventoryNumber: caseInfo.inventoryNumber,
                     price: tripCase.price,
                     filling: tripCase.filling,
-                    maxTemperature: tripCase.maxTemperature
+                    maxTemperature: tripCase.maxTemperature,
+                    tripCaseId:tripCase._id,
+                    caseId:tripCase.caseId,
+                    statistics
                 };
             }));
 
@@ -61,29 +57,30 @@ class TripController {
 
     async getTripClient(req, res) {
         try {
-            // Получаем id клиента из параметров запроса
-            const clientId = req.params.id;
-
-            // Находим Trip по id клиента и проверяем его принадлежность
+            const clientId = req.params.clientId;
             const trips = await Trip.find({ clientId });
 
             if (!trips) {
                 return res.status(404).json({ error: 'Trips not found for client' });
             }
 
-            // Подставляем инвентарный номер кейса вместо его id и информацию о рефрижераторе
             const tripsInfo = await Promise.all(trips.map(async (trip) => {
                 const tripCases = await TripCase.find({ tripId: trip._id });
                 const tripCasesInfo = await Promise.all(tripCases.map(async (tripCase) => {
                     const caseInfo = await Case.findById(tripCase.caseId);
+                    const statistics = await temperatureExceededService.calculateStatistics(tripCase._id);
+
                     return {
                         inventoryNumber: caseInfo.inventoryNumber,
                         price: tripCase.price,
                         filling: tripCase.filling,
-                        maxTemperature: tripCase.maxTemperature
+                        maxTemperature: tripCase.maxTemperature,
+                        tripCaseId:tripCase._id,
+                        caseId:tripCase.caseId,
+                        statistics
                     };
                 }));
-                const fridge = await Fridge.findOne({ timestamp: { $exists: false } });
+                const fridge = await Fridge.findById(trip.fridgeId);
                 return { trip, tripCasesInfo, fridgeLocation: fridge.location };
             }));
 
@@ -94,18 +91,27 @@ class TripController {
         }
     }
 
-    async getResourses(req, res) {
+    async getResources(req, res) {
         try {
-            // Получаем доступные кейсы
-            const cases = await Case.find({});
+            // Отримуємо всі активні поїздки
+            const activeTrips = await Trip.find({ finishFact: { $exists: false } });
 
-            // Получаем доступные водители
-            const drivers = await Driver.find({});
+            // Отримуємо масиви ID зайнятих водіїв, холодильників та кейсів
+            const occupiedDrivers = activeTrips.map(trip => trip.driverId);
+            const occupiedFridges = activeTrips.map(trip => trip.fridgeId);
+            const activeTripCases = await TripCase.find({ tripId: { $in: activeTrips.map(trip => trip._id) } });
+            const occupiedCases = activeTripCases.map(tripCase => tripCase.caseId);
 
-            // Получаем доступные рефрижераторы
-            const fridges = await Fridge.find({ timestamp: { $exists: false } });
+            // Отримуємо незайняті кейси
+            const availableCases = await Case.find({ _id: { $nin: occupiedCases } });
 
-            res.status(200).json({ cases, drivers, fridges });
+            // Отримуємо незайнятих водіїв
+            const availableDrivers = await Driver.find({ _id: { $nin: occupiedDrivers } });
+
+            // Отримуємо незайняті холодильники
+            const availableFridges = await Fridge.find({ _id: { $nin: occupiedFridges } });
+
+            res.status(200).json({ cases: availableCases, drivers: availableDrivers, fridges: availableFridges });
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Internal Server Error' });
@@ -114,13 +120,32 @@ class TripController {
 
     async finishTrip(req, res) {
         try {
-            // Получаем id Trip из параметров запроса
             const tripId = req.params.id;
 
-            // Обновляем статус завершения поездки
             const updatedTrip = await Trip.findByIdAndUpdate(tripId, { status: 'completed' }, { new: true });
 
             res.status(200).json(updatedTrip);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    }
+
+    async getAllTrips(req, res) {
+        try {
+            const trips = await Trip.find().sort({ finishFact: 1, start: 1 });
+            res.status(200).json(trips);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    }
+
+    async getClientTrips(req, res) {
+        try {
+            const clientId = req.params.clientId;
+            const trips = await Trip.find({ clientId }).sort({ finishFact: 1, start: 1 });
+            res.status(200).json(trips);
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Internal Server Error' });

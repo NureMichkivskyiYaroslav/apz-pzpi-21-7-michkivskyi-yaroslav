@@ -19,7 +19,7 @@ const clientMiddleware = async (req, res, next) => {
             const clientID=decodedToken.identifier
             const clientExists = await Client.findOne({ "_id": clientID });
             if (clientExists) {
-                req.clientID = decodedToken.identifier;
+                req.params.clientId = decodedToken.identifier;
                 next();
             } else {
                 res.status(403).json({ message: 'Access denied. Client undefined' });

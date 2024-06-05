@@ -1,6 +1,7 @@
 const Client = require('../models/Client');
 const Trip = require('../models/Trip');
 const {generateJWT} = require("../services/jwtService");
+const bcrypt = require('bcryptjs')
 
 class ClientController {
     async registerClient(req, res) {
@@ -12,7 +13,9 @@ class ClientController {
                 return res.status(400).json({ error: 'Client with this login already exists' });
             }
 
-            const newClient = await Client.create({ login, password, name, phone });
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            const newClient = await Client.create({ login, password: hashedPassword, name, phone });
             res.status(201).json(newClient);
         } catch (error) {
             console.error(error);
@@ -23,12 +26,19 @@ class ClientController {
     async loginClient(req, res) {
         try {
             const { login, password } = req.body;
-            const client = await Client.findOne({ login, password });
+
+            const client = await Client.findOne({ login });
             if (!client) {
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
-            const token = generateJWT('client', client._id, client.name)
-            res.status(200).json({token});
+
+            const isPasswordValid = await bcrypt.compare(password, client.password);
+            if (!isPasswordValid) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+
+            const token = generateJWT('client', client._id, client.name);
+            res.status(200).json({ token });
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Internal Server Error' });
@@ -37,7 +47,7 @@ class ClientController {
 
     async getClientTrips(req, res) {
         try {
-            const clientId = req.user._id;
+            const clientId = req._id;
             const clientTrips = await Trip.find({ clientId }).select('status start finishPlan finishFact');
             res.status(200).json(clientTrips);
         } catch (error) {
@@ -75,6 +85,19 @@ class ClientController {
             res.status(500).json({ error: 'Internal Server Error' });
         }
     }
+
+    async getAllClients(req, res) {
+        try {
+            const clients = await Client.find().select('-__v');
+
+            res.status(200).json(clients);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    }
 }
+
+
 
 module.exports = new ClientController();

@@ -6,6 +6,6 @@ function generateJWT (role, identifier, name){
         identifier,
         name
     }
-    return jwt.sign(payload, secret, {expiresIn:'1d'})
+    return jwt.sign(payload, secret, {expiresIn:'10d'})
 }
 module.exports = {generateJWT}

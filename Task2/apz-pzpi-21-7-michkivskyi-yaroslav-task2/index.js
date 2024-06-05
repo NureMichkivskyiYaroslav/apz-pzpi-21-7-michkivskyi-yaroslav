@@ -13,7 +13,7 @@ const {connection} = require('./config.js')
 const app = express()
 app.use(cors())
 
-app.use(express.json)
+app.use(express.json())
 app.use("/admin", AdminRouter);
 app.use("/client", ClientRouter);
 app.use("/driver", DriverRouter);
